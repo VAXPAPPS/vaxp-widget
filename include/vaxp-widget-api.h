@@ -1,6 +1,6 @@
-/* venom-widget-api.h */
-#ifndef VENOM_WIDGET_API_H
-#define VENOM_WIDGET_API_H
+/* vaxp-widget-api.h */
+#ifndef vaxp_WIDGET_API_H
+#define vaxp_WIDGET_API_H
 
 #include <gtk/gtk.h>
 
@@ -8,9 +8,9 @@
 typedef struct {
     GtkWidget *layout_container;
     void (*save_position)(const char *widget_name, int x, int y);
-} VenomDesktopAPI;
+} vaxpDesktopAPI;
 
-/* API struct returned by every valid venom widget (.so) */
+/* API struct returned by every valid vaxp widget (.so) */
 typedef struct {
     const char *name;
     const char *description;
@@ -21,10 +21,16 @@ typedef struct {
      * timers (via g_timeout_add), connects mouse motion for dragging
      * via layout_container, and returns the root GtkWidget*.
      */
-    GtkWidget* (*create_widget)(VenomDesktopAPI *desktop_api);
-} VenomWidgetAPI;
+    GtkWidget* (*create_widget)(vaxpDesktopAPI *desktop_api);
+    
+    /* Optional: Called by the Desktop Manager to update the widget's background color. */
+    void (*update_theme)(const char *bg_color, double opacity);
+
+    /* Optional: Called before the widget is destroyed. Must stop all internal timers. */
+    void (*destroy_widget)(void);
+} vaxpWidgetAPI;
 
 /* The expected factory symbol used dynamically by the loader. */
-/* extern VenomWidgetAPI venom_widget_init(void); */
+/* extern vaxpWidgetAPI vaxp_widget_init(void); */
 
 #endif

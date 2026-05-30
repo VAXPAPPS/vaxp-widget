@@ -1,5 +1,5 @@
 /*
- * mpris-player.c — Venom Desktop Widget  (v2 — redesigned)
+ * mpris-player.c — vaxp Desktop Widget  (v2 — redesigned)
  * MPRIS2 Music Player  +  PulseAudio master-volume control
  *
  * Layout (matches reference screenshot):
@@ -23,10 +23,10 @@
  * Compile:
  *   gcc -shared -fPIC -o mpris-player.so mpris-player.c \
  *       $(pkg-config --cflags --libs gtk+-3.0 gio-2.0) \
- *       -lm -I/path/to/venom-desktop/include
+ *       -lm -I/path/to/desktop/include
  *
  * Install:
- *   cp mpris-player.so ~/.config/venom/widgets/
+ *   cp mpris-player.so ~/.config/vaxp/widgets/
  */
 
 #include <gtk/gtk.h>
@@ -35,7 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "../../include/venom-widget-api.h"
+#include "../../include/vaxp-widget-api.h"
 
 /* ─── MPRIS D-Bus ─── */
 #define MPRIS_PREFIX        "org.mpris.MediaPlayer2."
@@ -80,6 +80,7 @@ typedef struct {
     GtkWidget *btn_next;
     GtkWidget *btn_repeat;
     GtkWidget *vol_slider;
+    guint     timer_id;
 
     gchar    *service;
     gboolean  is_playing;
@@ -102,10 +103,24 @@ typedef struct {
     gint      drag_rx, drag_ry;
     gint      drag_wx, drag_wy;
 
-    VenomDesktopAPI *api;
+    vaxpDesktopAPI *api;
 } PS;
 
 static PS S;
+
+static GtkCssProvider *bg_css = NULL;
+
+static void set_theme(const char *hex_color, double opacity) {
+    if (!bg_css) return;
+    GdkRGBA rgba;
+    if (!gdk_rgba_parse(&rgba, hex_color)) gdk_rgba_parse(&rgba, "#000000");
+    char op_str[G_ASCII_DTOSTR_BUF_SIZE];
+    g_ascii_dtostr(op_str, sizeof(op_str), opacity);
+    char *css = g_strdup_printf("box { background-color: rgba(%d, %d, %d, %s); }",
+        (int)(rgba.red*255), (int)(rgba.green*255), (int)(rgba.blue*255), op_str);
+    gtk_css_provider_load_from_data(bg_css, css, -1, NULL);
+    g_free(css);
+}
 
 /* ══════════════════════════════════════════════
    PulseAudio helpers (via pactl)
@@ -225,7 +240,7 @@ static void load_art(const gchar *url) {
         if (err) g_clear_error(&err);
     } else if (g_str_has_prefix(url, "http")) {
         char tmp[256];
-        snprintf(tmp, sizeof(tmp), "/tmp/venom_art_%u.jpg", g_str_hash(url));
+        snprintf(tmp, sizeof(tmp), "/tmp/vaxp_art_%u.jpg", g_str_hash(url));
         char cmd[512];
         snprintf(cmd, sizeof(cmd),
                  "curl -sL --max-time 5 -o '%s' '%s' 2>/dev/null", tmp, url);
@@ -547,9 +562,15 @@ static gboolean on_card_press(GtkWidget *w, GdkEventButton *ev, gpointer d) {
 }
 static gboolean on_card_motion(GtkWidget *w, GdkEventMotion *ev, gpointer d) {
     if (!S.dragging || !S.api || !S.api->layout_container) return FALSE;
-    gtk_layout_move(GTK_LAYOUT(S.api->layout_container), w,
-        S.drag_wx + (int)(ev->x_root - S.drag_rx),
-        S.drag_wy + (int)(ev->y_root - S.drag_ry));
+    GtkWidget *target = w;
+    while (target && gtk_widget_get_parent(target) != S.api->layout_container) {
+        target = gtk_widget_get_parent(target);
+    }
+    if (target) {
+        gtk_layout_move(GTK_LAYOUT(S.api->layout_container), target,
+            S.drag_wx + (int)(ev->x_root - S.drag_rx),
+            S.drag_wy + (int)(ev->y_root - S.drag_ry));
+    }
     return TRUE;
 }
 static gboolean on_card_release(GtkWidget *w, GdkEventButton *ev, gpointer d) {
@@ -568,7 +589,6 @@ static gboolean on_card_release(GtkWidget *w, GdkEventButton *ev, gpointer d) {
    ══════════════════════════════════════════════ */
 static const gchar *WIDGET_CSS =
     "box.mp-card {"
-    "  background-color: " COL_BG ";"
     "  border: 1px solid " COL_BORDER ";"
     "  border-radius: 16px;"
     "  padding: 16px 16px 12px 16px;"
@@ -632,7 +652,7 @@ static const gchar *WIDGET_CSS =
 /* ══════════════════════════════════════════════
    Widget construction
    ══════════════════════════════════════════════ */
-static GtkWidget *create_mpris_widget(VenomDesktopAPI *api) {
+static GtkWidget *create_mpris_widget(vaxpDesktopAPI *api) {
     memset(&S, 0, sizeof(S));
     S.api          = api;
     S.pa_available = pa_check();
@@ -659,6 +679,11 @@ static GtkWidget *create_mpris_widget(VenomDesktopAPI *api) {
     GtkWidget *card = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
     gtk_style_context_add_class(gtk_widget_get_style_context(card), "mp-card");
     gtk_container_add(GTK_CONTAINER(S.root_eb), card);
+
+    GtkStyleContext *context = gtk_widget_get_style_context(card);
+    bg_css = gtk_css_provider_new();
+    gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(bg_css), 801);
+    set_theme("#000000", 0.23); /* default */
 
     /* ── 1. Album Art ── */
     S.art_area = gtk_drawing_area_new();
@@ -768,19 +793,28 @@ static GtkWidget *create_mpris_widget(VenomDesktopAPI *api) {
     gtk_widget_show_all(S.root_eb);
 
     poll_mpris(NULL);
-    g_timeout_add(10, poll_mpris, NULL);
+    S.timer_id = g_timeout_add(2000, poll_mpris, NULL);
 
     return S.root_eb;
 }
 
+static void destroy_mpris(void) {
+    if (S.timer_id) {
+        g_source_remove(S.timer_id);
+        S.timer_id = 0;
+    }
+}
+
 /* ══════════════════════════════════════════════
-   Venom entry point
+   vaxp entry point
    ══════════════════════════════════════════════ */
-VenomWidgetAPI *venom_widget_init(void) {
-    static VenomWidgetAPI api;
-    api.name          = "MPRIS Music Player";
-    api.description   = "MPRIS2 player with PulseAudio master volume control";
-    api.author        = "Venom Community";
-    api.create_widget = create_mpris_widget;
+vaxpWidgetAPI *vaxp_widget_init(void) {
+    static vaxpWidgetAPI api;
+    api.name           = "MPRIS Music Player";
+    api.description    = "MPRIS2 player with PulseAudio master volume control";
+    api.author         = "vaxp Community";
+    api.create_widget  = create_mpris_widget;
+    api.update_theme   = set_theme;
+    api.destroy_widget = destroy_mpris;
     return &api;
 }

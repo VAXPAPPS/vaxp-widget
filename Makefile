@@ -6,16 +6,16 @@ COMMON_CFLAGS  ?= -O2 -Wall -Wextra -fPIC
 COMMON_LDFLAGS ?= -shared
 
 BUILD_DIR := build
-INSTALL_DIR ?= $(HOME)/.config/venom/widgets
+INSTALL_DIR ?= $(HOME)/.config/vaxp/widgets
 
 WIDGET_SOURCES := \
 	src/widgets/analog_clock.c \
 	src/widgets/calendar.c \
 	src/widgets/gpu_monitor.c \
 	src/widgets/mpris-player.c \
-	src/widgets/slideshow.c \
 	src/widgets/sysmonitor-pro.c \
-	src/widgets/weather.c
+	src/widgets/weather.c \
+	src/widgets/date_widget.c
 
 WIDGET_SOS := $(patsubst src/widgets/%.c,$(BUILD_DIR)/%.so,$(WIDGET_SOURCES))
 
@@ -49,6 +49,9 @@ $(BUILD_DIR)/sysmonitor-pro.so: EXTRA_LIBS = -lm
 
 $(BUILD_DIR)/weather.so: PKGS = gtk+-3.0 cairo
 $(BUILD_DIR)/weather.so: EXTRA_LIBS = -lcurl -lcjson -lm
+
+$(BUILD_DIR)/date_widget.so: PKGS = gtk+-3.0
+$(BUILD_DIR)/date_widget.so: EXTRA_LIBS = -lm
 
 $(BUILD_DIR)/%.so: src/widgets/%.c | $(BUILD_DIR)
 	$(CC) $(COMMON_CFLAGS) $(COMMON_LDFLAGS) -o $@ $< \

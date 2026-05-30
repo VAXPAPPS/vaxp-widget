@@ -27,13 +27,16 @@
  */
 
 #include <gtk/gtk.h>
+
+static guint g_widget_timer_id = 0;
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <sys/statvfs.h>
 #include <sys/utsname.h>
-#include "../../include/venom-widget-api.h"
+#include "../../include/vaxp-widget-api.h"
 
 /* ─── Dimensions ─── */
 #define WIDGET_W       340
@@ -113,7 +116,7 @@ typedef struct {
     /* Drag */
     gboolean  dragging;
     gint      drag_rx, drag_ry, drag_wx, drag_wy;
-    VenomDesktopAPI *api;
+    vaxpDesktopAPI *api;
 } SysState;
 
 static SysState M;
@@ -767,7 +770,7 @@ static GtkWidget *make_row(const gchar *title_txt,
 /* ══════════════════════════════════════════════
    Widget construction
    ══════════════════════════════════════════════ */
-static GtkWidget *create_sysmon_widget(VenomDesktopAPI *api) {
+static GtkWidget *create_sysmon_widget(vaxpDesktopAPI *api) {
     memset(&M, 0, sizeof(M));
     M.api = api;
 
@@ -920,7 +923,7 @@ static GtkWidget *create_sysmon_widget(VenomDesktopAPI *api) {
 
     /* Start updating every 2 seconds */
     update_stats(NULL);
-    g_timeout_add(1000, update_stats, NULL);
+    g_widget_timer_id = g_timeout_add(1000, update_stats, NULL);
 
     return root;
 }
@@ -928,11 +931,21 @@ static GtkWidget *create_sysmon_widget(VenomDesktopAPI *api) {
 /* ══════════════════════════════════════════════
    Venom entry point
    ══════════════════════════════════════════════ */
-VenomWidgetAPI *venom_widget_init(void) {
-    static VenomWidgetAPI api;
+
+static void destroy_sysmon(void) {
+    if (g_widget_timer_id) {
+        g_source_remove(g_widget_timer_id);
+        g_widget_timer_id = 0;
+    }
+}
+
+vaxpWidgetAPI *vaxp_widget_init(void) {
+    static vaxpWidgetAPI api;
     api.name          = "System Monitor Pro";
     api.description   = "CPU · RAM · Disk · Temp · Network — live charts";
     api.author        = "Venom Community";
     api.create_widget = create_sysmon_widget;
+    api.update_theme  = NULL;
+    api.destroy_widget= destroy_sysmon;
     return &api;
 }

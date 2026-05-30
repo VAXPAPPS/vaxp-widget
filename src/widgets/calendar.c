@@ -6,7 +6,7 @@
  *   - Full month grid display
  *   - Today highlight
  *   - Prev / Next month navigation buttons
- *   - Drag & Drop support via VenomDesktopAPI
+ *   - Drag & Drop support via vaxpDesktopAPI
  *
  * Compile:
  *   gcc -shared -fPIC -o calendar.so calendar.c \
@@ -24,13 +24,13 @@
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
-#include "../../include/venom-widget-api.h"
+#include "../../include/vaxp-widget-api.h"
 
 /* ------------------------------------------------------------------ */
 /*  State                                                               */
 /* ------------------------------------------------------------------ */
 
-static VenomDesktopAPI *api_handle  = NULL;
+static vaxpDesktopAPI *api_handle  = NULL;
 
 /* Drag state */
 static gboolean is_dragging   = FALSE;
@@ -279,7 +279,7 @@ static gboolean on_button_release(GtkWidget *w, GdkEventButton *ev, gpointer d) 
 /* ------------------------------------------------------------------ */
 /*  create_widget — called once by the desktop manager                 */
 /* ------------------------------------------------------------------ */
-static GtkWidget *create_calendar_ui(VenomDesktopAPI *desktop_api) {
+static GtkWidget *create_calendar_ui(vaxpDesktopAPI *desktop_api) {
     api_handle = desktop_api;
 
     /* ── Seed today's date ── */
@@ -358,13 +358,20 @@ static GtkWidget *create_calendar_ui(VenomDesktopAPI *desktop_api) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Plugin entry point — loaded by dlsym("venom_widget_init")          */
+/*  Plugin entry point — loaded by dlsym("vaxp_widget_init")          */
 /* ------------------------------------------------------------------ */
-VenomWidgetAPI *venom_widget_init(void) {
-    static VenomWidgetAPI api;
+
+static void destroy_calendar(void) {
+    /* No active timers or threads to clean up in this widget */
+}
+
+vaxpWidgetAPI *vaxp_widget_init(void) {
+    static vaxpWidgetAPI api;
     api.name          = "Calendar";
     api.description   = "Glassmorphism monthly calendar with navigation.";
     api.author        = "Venom Community";
     api.create_widget = create_calendar_ui;
+    api.update_theme  = NULL;
+    api.destroy_widget= destroy_calendar;
     return &api;
 }

@@ -14,7 +14,7 @@
  *   • Central boss — layered circles simulating a polished screw
  *   • Smooth 33 ms redraws (~30 fps) for fluid second-hand sweep
  *   • Date + weekday label rendered below the face
- *   • Full Drag-and-Drop via VenomDesktopAPI
+ *   • Full Drag-and-Drop via vaxpDesktopAPI
  *     — mouse events attached to the Cairo DrawingArea
  *     — gdk_seat_grab keeps pointer captured during fast drags
  *     — position clamped to (0,0) minimum, saved on mouse release
@@ -32,11 +32,14 @@
  */
 
 #include <gtk/gtk.h>
+
+static guint g_widget_timer_id = 0;
+
 #include <cairo.h>
 #include <math.h>
 #include <time.h>
 #include <string.h>
-#include "../../include/venom-widget-api.h"
+#include "../../include/vaxp-widget-api.h"
 
 /* ================================================================== */
 /*  Tunables                                                            */
@@ -61,7 +64,7 @@ typedef struct {
     int               widget_sx;     /* widget x at drag start (layout coords)  */
     int               widget_sy;     /* widget y at drag start (layout coords)  */
 
-    VenomDesktopAPI  *api;
+    vaxpDesktopAPI  *api;
 } AnalogClock;
 
 static AnalogClock *g_ac = NULL;   /* singleton */
@@ -555,7 +558,7 @@ static const char *CLOCK_CSS =
 /* ================================================================== */
 /*  Build the widget UI                                                 */
 /* ================================================================== */
-static GtkWidget *create_clock_widget(VenomDesktopAPI *desktop_api) {
+static GtkWidget *create_clock_widget(vaxpDesktopAPI *desktop_api) {
     g_ac = g_new0(AnalogClock, 1);
     AnalogClock *ac = g_ac;
     ac->api = desktop_api;
@@ -612,7 +615,7 @@ static GtkWidget *create_clock_widget(VenomDesktopAPI *desktop_api) {
     gtk_widget_show_all(ac->root_eb);
 
     /* ~30 fps redraw timer */
-    g_timeout_add(REDRAW_MS, on_tick, ac);
+    g_widget_timer_id = g_timeout_add(REDRAW_MS, on_tick, ac);
 
     return ac->root_eb;
 }
@@ -620,11 +623,25 @@ static GtkWidget *create_clock_widget(VenomDesktopAPI *desktop_api) {
 /* ================================================================== */
 /*  Plugin entry point                                                  */
 /* ================================================================== */
-VenomWidgetAPI *venom_widget_init(void) {
-    static VenomWidgetAPI api;
+
+static void destroy_analog_clock(void) {
+    if (g_widget_timer_id) {
+        g_source_remove(g_widget_timer_id);
+        g_widget_timer_id = 0;
+    }
+    if (g_ac) {
+        g_free(g_ac);
+        g_ac = NULL;
+    }
+}
+
+vaxpWidgetAPI *vaxp_widget_init(void) {
+    static vaxpWidgetAPI api;
     api.name          = "Analog Clock";
     api.description   = "High-quality Cairo analog clock with smooth sweep hands.";
     api.author        = "Venom Community";
     api.create_widget = create_clock_widget;
+    api.update_theme  = NULL;
+    api.destroy_widget= destroy_analog_clock;
     return &api;
 }

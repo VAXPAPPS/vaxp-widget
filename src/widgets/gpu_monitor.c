@@ -41,6 +41,9 @@
  */
 
 #include <gtk/gtk.h>
+
+static guint g_widget_timer_id = 0;
+
 #include <cairo.h>
 #include <glib.h>
 #include <stdio.h>
@@ -48,7 +51,7 @@
 #include <string.h>
 #include <math.h>
 #include <dirent.h>
-#include "../../include/venom-widget-api.h"
+#include "../../include/vaxp-widget-api.h"
 
 /* ================================================================== */
 /*  Constants                                                           */
@@ -115,7 +118,7 @@ typedef struct {
     int         drag_sx, drag_sy;
     int         widget_sx, widget_sy;
 
-    VenomDesktopAPI *api;
+    vaxpDesktopAPI *api;
 } GpuWidget;
 
 static GpuWidget *g_gw = NULL;
@@ -342,6 +345,8 @@ static void fetch_nouveau(GpuWidget *gw, GpuData *d) {
     d->valid         = TRUE;
 }
 
+static volatile gboolean g_gpu_running = TRUE;
+
 /* ================================================================== */
 /*  WORKER THREAD                                                       */
 /* ================================================================== */
@@ -349,7 +354,7 @@ static gpointer poll_thread(gpointer ud) {
     GpuWidget *gw = (GpuWidget *)ud;
     GpuData d;
 
-    while (TRUE) {
+    while (g_gpu_running) {
         memset(&d, 0, sizeof(d));
         strncpy(d.gpu_name, gw->cur.gpu_name, 127);
         d.vendor = gw->vendor;
@@ -827,7 +832,7 @@ static const char *CSS =
 /* ================================================================== */
 /*  BUILD UI                                                            */
 /* ================================================================== */
-static GtkWidget *create_gpu_widget(VenomDesktopAPI *desktop_api) {
+static GtkWidget *create_gpu_widget(vaxpDesktopAPI *desktop_api) {
     g_gw = g_new0(GpuWidget, 1);
     GpuWidget *gw = g_gw;
     gw->api = desktop_api;
@@ -962,8 +967,9 @@ static GtkWidget *create_gpu_widget(VenomDesktopAPI *desktop_api) {
     gtk_widget_show_all(gw->root_eb);
 
     /* Start background poller + GTK tick */
+    g_gpu_running = TRUE;
     g_thread_new("gpu-poll", poll_thread, gw);
-    g_timeout_add(UPDATE_MS, on_tick, gw);
+    g_widget_timer_id = g_timeout_add(UPDATE_MS, on_tick, gw);
 
     return gw->root_eb;
 }
@@ -971,11 +977,22 @@ static GtkWidget *create_gpu_widget(VenomDesktopAPI *desktop_api) {
 /* ================================================================== */
 /*  Plugin entry point                                                  */
 /* ================================================================== */
-VenomWidgetAPI *venom_widget_init(void) {
-    static VenomWidgetAPI api;
+
+static void destroy_gpu_monitor(void) {
+    if (g_widget_timer_id) {
+        g_source_remove(g_widget_timer_id);
+        g_widget_timer_id = 0;
+    }
+    g_gpu_running = FALSE;
+}
+
+vaxpWidgetAPI *vaxp_widget_init(void) {
+    static vaxpWidgetAPI api;
     api.name          = "GPU Monitor";
     api.description   = "Real-time GPU temp, load, VRAM, fan & power — NVIDIA + AMD.";
     api.author        = "Venom Community";
     api.create_widget = create_gpu_widget;
+    api.update_theme  = NULL;
+    api.destroy_widget= destroy_gpu_monitor;
     return &api;
 }

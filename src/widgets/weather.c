@@ -13,7 +13,7 @@
  * │  • Dynamic background tint per weather condition    │
  * │  • Settings popover: change city without restart    │
  * │  • Right-click → instant refresh                    │
- * │  • Drag & Drop via VenomDesktopAPI                  │
+ * │  • Drag & Drop via vaxpDesktopAPI                  │
  * │  • Auto-refresh every 10 min                        │
  * └─────────────────────────────────────────────────────┘
  *
@@ -40,6 +40,9 @@
  */
 
 #include <gtk/gtk.h>
+
+static guint g_widget_timer_id = 0;
+
 #include <glib.h>
 #include <cairo.h>
 #include <stdio.h>
@@ -48,7 +51,7 @@
 #include <math.h>
 #include <curl/curl.h>
 #include <cjson/cJSON.h>
-#include "../../include/venom-widget-api.h"
+#include "../../include/vaxp-widget-api.h"
 
 /* ================================================================== */
 /*  Constants                                                          */
@@ -271,7 +274,7 @@ typedef struct {
     gboolean dragging;
     int drag_sx, drag_sy, widget_sx, widget_sy;
 
-    VenomDesktopAPI *api;
+    vaxpDesktopAPI *api;
 } WeatherWidget;
 
 static WeatherWidget *g_ww = NULL;
@@ -756,7 +759,7 @@ static const char *CSS =
 /* ================================================================== */
 /*  Build UI                                                            */
 /* ================================================================== */
-static GtkWidget *create_weather_ui(VenomDesktopAPI *desktop_api) {
+static GtkWidget *create_weather_ui(vaxpDesktopAPI *desktop_api) {
     g_ww = g_new0(WeatherWidget,1);
     WeatherWidget *ww = g_ww;
     ww->api = desktop_api;
@@ -940,18 +943,32 @@ static GtkWidget *create_weather_ui(VenomDesktopAPI *desktop_api) {
     gtk_widget_show_all(ww->root_eb);
 
     start_fetch(ww);
-    g_timeout_add(UPDATE_MS,on_timer,ww);
+    g_widget_timer_id = g_timeout_add(UPDATE_MS,on_timer,ww);
     return ww->root_eb;
 }
 
 /* ================================================================== */
 /*  Plugin entry point                                                  */
 /* ================================================================== */
-VenomWidgetAPI *venom_widget_init(void) {
-    static VenomWidgetAPI api;
+
+static void destroy_weather(void) {
+    if (g_widget_timer_id) {
+        g_source_remove(g_widget_timer_id);
+        g_widget_timer_id = 0;
+    }
+    if (g_ww) {
+        g_free(g_ww);
+        g_ww = NULL;
+    }
+}
+
+vaxpWidgetAPI *vaxp_widget_init(void) {
+    static vaxpWidgetAPI api;
     api.name          = "Weather (Advanced)";
     api.description   = "wttr.in: current + hourly strip + 3-day forecast + temp curve.";
     api.author        = "Venom Community";
     api.create_widget = create_weather_ui;
+    api.update_theme  = NULL;
+    api.destroy_widget= destroy_weather;
     return &api;
 }
