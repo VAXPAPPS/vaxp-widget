@@ -760,7 +760,6 @@ static gboolean on_press(GtkWidget *w, GdkEventButton *ev, gpointer ud) {
 }
 
 static gboolean on_motion(GtkWidget *w, GdkEventMotion *ev, gpointer ud) {
-    (void)w;
     GpuWidget *gw = (GpuWidget *)ud;
     if (gw->dragging && !(ev->state & GDK_BUTTON1_MASK)) {
         gw->dragging = FALSE;
@@ -771,8 +770,13 @@ static gboolean on_motion(GtkWidget *w, GdkEventMotion *ev, gpointer ud) {
         int ny = gw->widget_sy + (int)(ev->y_root - gw->drag_sy);
         if (nx < 0) nx = 0;
         if (ny < 0) ny = 0;
-        gtk_layout_move(GTK_LAYOUT(gw->api->layout_container),
-                        gw->root_eb, nx, ny);
+        GtkWidget *target = w;
+        while (target && gtk_widget_get_parent(target) != gw->api->layout_container) {
+            target = gtk_widget_get_parent(target);
+        }
+        if (target) {
+            gtk_layout_move(GTK_LAYOUT(gw->api->layout_container), target, nx, ny);
+        }
         return TRUE;
     }
     return FALSE;

@@ -678,9 +678,15 @@ static gboolean on_press(GtkWidget *w, GdkEventButton *ev, gpointer d) {
 }
 static gboolean on_motion(GtkWidget *w, GdkEventMotion *ev, gpointer d) {
     if (!M.dragging || !M.api || !M.api->layout_container) return FALSE;
-    gtk_layout_move(GTK_LAYOUT(M.api->layout_container), w,
-        M.drag_wx + (int)(ev->x_root - M.drag_rx),
-        M.drag_wy + (int)(ev->y_root - M.drag_ry));
+    GtkWidget *target = w;
+    while (target && gtk_widget_get_parent(target) != M.api->layout_container) {
+        target = gtk_widget_get_parent(target);
+    }
+    if (target) {
+        gtk_layout_move(GTK_LAYOUT(M.api->layout_container), target,
+            M.drag_wx + (int)(ev->x_root - M.drag_rx),
+            M.drag_wy + (int)(ev->y_root - M.drag_ry));
+    }
     return TRUE;
 }
 static gboolean on_release(GtkWidget *w, GdkEventButton *ev, gpointer d) {
