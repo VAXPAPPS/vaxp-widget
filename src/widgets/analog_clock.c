@@ -461,81 +461,48 @@ static gboolean on_tick(gpointer data) {
 /* ================================================================== */
 static gboolean on_press(GtkWidget *w, GdkEventButton *ev, gpointer ud) {
     AnalogClock *ac = (AnalogClock *)ud;
+    if (ev->button != 1) return FALSE;
 
-    if (ev->button == 1) {
-        ac->dragging = TRUE;
+    ac->dragging = TRUE;
+    ac->drag_sx = (int)ev->x_root;
+    ac->drag_sy = (int)ev->y_root;
 
-        /* remember where the pointer was (screen / root coords) */
-        ac->drag_sx = (int)ev->x_root;
-        ac->drag_sy = (int)ev->y_root;
+    gint wx, wy;
+    gtk_widget_translate_coordinates(w, gtk_widget_get_toplevel(w), 0, 0, &wx, &wy);
+    ac->widget_sx = wx;
+    ac->widget_sy = wy;
 
-        /* remember where root_eb currently sits in the layout */
-        gint wx = 0, wy = 0;
-        gtk_widget_translate_coordinates(
-            ac->root_eb,
-            gtk_widget_get_toplevel(ac->root_eb),
-            0, 0, &wx, &wy);
-        ac->widget_sx = wx;
-        ac->widget_sy = wy;
-
-        /* grab the pointer so motion events keep arriving during fast drags */
-        gdk_seat_grab(
-            gdk_display_get_default_seat(gdk_display_get_default()),
-            gtk_widget_get_window(w),
-            GDK_SEAT_CAPABILITY_POINTER,
-            FALSE, NULL, (GdkEvent *)ev, NULL, NULL);
-
-        return TRUE;
-    }
-    return FALSE;
+    return TRUE;
 }
 
 static gboolean on_motion(GtkWidget *w, GdkEventMotion *ev, gpointer ud) {
-    (void)w;
     AnalogClock *ac = (AnalogClock *)ud;
+    if (!ac->dragging || !ac->api || !ac->api->layout_container) return FALSE;
 
-    if (ac->dragging && ac->api && ac->api->layout_container) {
-        int nx = ac->widget_sx + (int)(ev->x_root - ac->drag_sx);
-        int ny = ac->widget_sy + (int)(ev->y_root - ac->drag_sy);
-
-        /* prevent the widget from going off the top-left edge */
-        if (nx < 0) nx = 0;
-        if (ny < 0) ny = 0;
-
-        /* move the whole root_eb (not just the drawing area) */
-        gtk_layout_move(
-            GTK_LAYOUT(ac->api->layout_container),
-            ac->root_eb,
-            nx, ny);
-
-        return TRUE;
+    GtkWidget *target = w;
+    while (target && gtk_widget_get_parent(target) != ac->api->layout_container) {
+        target = gtk_widget_get_parent(target);
     }
-    return FALSE;
+    
+    if (target) {
+        gtk_layout_move(GTK_LAYOUT(ac->api->layout_container), target,
+            ac->widget_sx + (int)(ev->x_root - ac->drag_sx),
+            ac->widget_sy + (int)(ev->y_root - ac->drag_sy));
+    }
+    return TRUE;
 }
 
 static gboolean on_release(GtkWidget *w, GdkEventButton *ev, gpointer ud) {
-    (void)w;
     AnalogClock *ac = (AnalogClock *)ud;
+    if (ev->button != 1 || !ac->dragging) return FALSE;
 
-    if (ev->button == 1 && ac->dragging) {
-        ac->dragging = FALSE;
-
-        /* release pointer grab */
-        gdk_seat_ungrab(
-            gdk_display_get_default_seat(gdk_display_get_default()));
-
-        /* persist the final position so the manager can restore it */
-        if (ac->api && ac->api->save_position && ac->api->layout_container) {
-            gint x = 0, y = 0;
-            gtk_widget_translate_coordinates(
-                ac->root_eb,
-                gtk_widget_get_toplevel(ac->root_eb),
-                0, 0, &x, &y);
-            ac->api->save_position("analog_clock.so", x, y);
-        }
-        return TRUE;
+    ac->dragging = FALSE;
+    if (ac->api && ac->api->save_position && ac->api->layout_container) {
+        gint x, y;
+        gtk_widget_translate_coordinates(w, gtk_widget_get_toplevel(w), 0, 0, &x, &y);
+        ac->api->save_position("analog_clock.so", x, y);
     }
-    return FALSE;
+    return TRUE;
 }
 
 /* ================================================================== */

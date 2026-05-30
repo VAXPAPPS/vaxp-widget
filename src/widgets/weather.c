@@ -671,7 +671,13 @@ static gboolean on_motion(GtkWidget *w, GdkEventMotion *ev, gpointer ud){
     if(ww->dragging&&ww->api&&ww->api->layout_container){
         int nx=ww->widget_sx+(int)(ev->x_root-ww->drag_sx);
         int ny=ww->widget_sy+(int)(ev->y_root-ww->drag_sy);
-        gtk_layout_move(GTK_LAYOUT(ww->api->layout_container),w,nx,ny);
+        GtkWidget *target = w;
+        while (target && gtk_widget_get_parent(target) != ww->api->layout_container) {
+            target = gtk_widget_get_parent(target);
+        }
+        if (target) {
+            gtk_layout_move(GTK_LAYOUT(ww->api->layout_container), target, nx, ny);
+        }
         return TRUE;
     }
     return FALSE;
